@@ -1,0 +1,300 @@
+#============Instalação do Arch Linux com LVM + Luks  via SSH ==================
+
+#carregar o layout do teclado
+loadkeys br-abnt2
+
+#======================================
+
+Inicie a máquina destino em um ambiente Arch live por meio de uma imagem CD/USB Live: isso vai autenticar o usuário como root.
+Em seguida, configure uma senha de root que é necessária para uma conexão SSH, já que a senha padrão do Arch para root é vazia
+
+intale o sshd e habilite em seguida
+
+pacman -S openssh
+
+systemctl start sshd.service
+
+Agora so abrir o putty em outra maquina e seguir passos
+
+#=================================
+#Preparação dos Discos 
+#/dev/sda1 200MB       ext3       (vai ser utilizada para o boot)
+#/dev/sda2 (restante do disco)  Linux LVM  (vamos separar aqui /, /home e swap)12 luksFormat /dev/sda2 
+o = Marca o disco como DOS
+n = Escolha de disco
+p =
+a =
+n =
+p =
+t =
+8E
+#====================================================================
+#Encriptação
+#Carregar o módulo para utilizar o Luks:
+modprobe dm-crypt
+#-----------------------------------------
+
+#Criptografar. Vou utilizar AES 512 
+cryptsetup -c aes-xts-plain64 -y -s 512 luksFormat /dev/sda2
+
+#---------------------------------------------
+
+#Abrir o disco para ser utilizado e preparado com o LVM para então formatá-los e todo o restante.
+cryptsetup open --type luks /dev/sda2 lvm
+
+
+#====================================================================
+
+#Configurando LVM
+#Dizer ao LVM qual dispositivo ele vai poder utilizar
+pvcreate --dataalignment 1m /dev/mapper/lvm
+
+#-------------------------------------------------------
+#Endereço dito mais acima, onde o disco está disponível para uso após abri-lo com Luks.
+#O VG (Volume Group) vai ser responsável por agrupar volumes físicos, 
+
+vgcreate volgroup0 /dev/mapper/lvm
+
+#LV (Logical Volume) são as partições lógicas criadas pelo LVM. 
+#Será nelas que as interações do kernel vão ocorrer e não mais diretamente no harware.
+
+# / = 30GB
+# swap = 8GG
+# /home = restante
+#--------------------------------------------------------------
+#Se vai seguir a mesma configuração, os comandos ficam assim:
+lvcreate -L 30GB volgroup0 -n lv_root
+lvcreate -L 8GB volgroup0 -n lv_swap
+lvcreate -l 100%FREE volgroup0 -n lv_home
+
+#--------------------------------------------------------------
+#carregar o mod e verificar se foi criado as partiçoes
+modprobe dm_mod
+vgscan
+vgchange -ay
+
+#===============================================================
+#Formatação
+
+mkfs.ext2 /dev/sda1
+mkfs.ext4 /dev/volgroup0/lv_root
+mkfs.ext4 /dev/volgroup0/lv_home
+
+#E a criação da swap:
+# mkswap /dev/volgroup0/lv_swap
+#===============================================================
+#Montagem
+
+mount /dev/volgroup0/lv_root /mnt
+mkdir /mnt/boot
+mount /dev/sda1 /mnt/boot
+mkdir /mnt/home
+mount /dev/volgroup0/lv_home /mnt/home
+swapon /dev/volgroup0/lv_swap
+
+Note como está organizado, com /, /boot e /home separados.
+#===============================================================
+#Instalação
+pacstrap /mnt base base-devel
+#------------------------------------
+
+#O Grub, a primeira parte:
+pacstrap /mnt grub-bios
+#------------------------------------
+#E gerar o fstab para “automatizar” a montagem das partições:
+genfstab -p -U /mnt >> /mnt/etc/fstab
+
+#================================================================
+#Entrar no sistema e configurar
+arch-chroot /mnt
+#=================================================================
+
+#instalando pacote essenciais
+pacman -S openssh linux-headers linux-lts linux-lts-headers wpa_supplicant wireless_tools vim
+
+pacman -S networkmanager network-manager-applet wireless_tools wpa_supplicant wpa_actiond dialog
+
+#############################################################
+#Grub - Segunda parte
+#Antes do Grub, abra o arquivo /etc/mkinitcpio.conf. Procure por “HOOKS” e coloque antes de “filesystems” a seguinte sequência: “keymap encrypt lvm2”.
+
+vim /etc/mkinitcpio.conf
+#HOOKS=(base undev autodetect modconf block keymap encrypt lvm2 filesystems keyboard fsck)
+
+#Depois rode o comando:
+
+mkinitcpio -p linux
+mkinitcpio -p linux-lts
+
+
+####################################################################
+#E edita o arquivo /etc/default/grub, na opção GRUB_CMDLINE_LINUX_DEFAULT adicione"cryptdevice=/dev/sda2:volgroup0 quiet"
+
+Vim /etc/default/grub
+
+#GRUB_CMDLINE_LINUX_DEFAULT="cryptdevice=/dev/sda2:volgroup0 quiet"
+
+mkdir /boot/EFI
+
+
+
+mount /dev/sda1 /boot/EFI
+
+grub-install --target=x86_64-efi --bootloader-id=grub_uefi --recheck
+
+cp /usr/share/locale/en\@quot/LC_MESSAGES/grub.mo /boot/grub/locale/en.mo
+
+
+
+grub-mkconfig -o /boot/grub/grub.cfg
+
+
+#Agora sim, Grub fazemos a instalação da segunda parte:
+
+grub-install --target=i386-pc --recheck /dev/sda
+
+cp /usr/share/locale/en\@quot/LC_MESSAGES/grub.mo /boot/grub/locale/en.mo
+
+grub-mkconfig -o /boot/grub/grub.cfg
+
+#===================================================================
+
+#Senha do root
+passwd
+#----------------
+
+
+#Pronto! Agora precisamos sair do chroot e desmontar os discos:
+
+# exit
+# umount /mnt/boot
+# umount /mnt/home
+# umount/mnt
+# reboot
+
+
+##############################################################################################################################################################################
+
+
+
+CONFIGURAÇÃO
+
+# Adicionar usuário  remover -s sinalizador se você não quiser usar o zsh
+useradd -m -g users -G adm,systemd-journal,wheel,rfkill,games,power,optical,storage,scanner,lp,audio,video -s /bin/bash username
+passwd username
+
+##################################################
+
+#muda a linguagem para portugues br
+nano /etc/locale.gen
+
+##################################################
+
+#descomentar essas linhas:
+pt_BR.UTF-8 UTF-8
+pt_BR.ISO 8959-2
+
+#executar esse comando:
+locale-gen
+
+###################################################
+
+#criar o aquirvo de conf de lingua
+
+echo LANG=pt_BR.UTF-8 >> /etc/locale.conf
+export LANG=pt_BR.UTF-8
+
+#setando configuracoes de teclado para que persistam pos reboot
+nano /etc/vconsole.conf
+
+#adiciona essas linhas no arquivo e salva
+KEYMAP=br-abnt2
+FONT=Lat2-Terminus16
+FONT_MAP=
+
+##############################################################
+
+#setando fuso horario
+#ln -sf /usr/share/zoneinfo/Região/Cidade /etc/localtime
+ln -s /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+
+#sincronizando o relogio de hardware com o do sistema
+hwclock --systohc --utc
+
+############################################################
+hostnamectl set-hostname 
+
+###############################################################
+#instalando o xorg 
+pacman -S xf86-input-libinput xorg-server xorg-xinit xorg-server-utils mesa
+
+#instalar driver de video
+lspci (exibe qual e a placa de video)
+pacman -S xf86-video-intel lib32-intel-dri lib32-mesa lib32-libgl
+
+=================================================
+Interface grafica XFCE
+sudo pacman -S xfce4 xfce4-goodies gamin firefox
+
+cp /etc/X11/xinit/xinitrc ~/.xinitrc
+
+nano ~/.xinitrc (comentar exec xterm ... add exec startxfce4)
+
+startx 
+
+==================================================
+#Instalar o pacote xdg-user-dirs para adicionar pastas no /home:
+sudo pacman -S xdg-user-dirs
+
+#Depois basta rodar o seguinte comando no terminal:
+xdg-user-dirs-update
+
+
+========================================
+
+#configurar teclado abnt2 no ambiente X:
+localectl set-x11-keymap br abnt2
+
+============================================
+
+# instalar Gerenciador de Login slim
+sudo pacman -S slim slim-themes archlinux-themes-slim
+
+Habilitar na inicializacao
+sudo systemctl enable slim.service
+
+Trocar Tema de inicializa;áo 
+sudo nano /etc/slim.conf (tema do arch archlinux-simplyblack)
+
+===============================================================
+
+#instalar AUR
+sudo nano /etc/pacman.conf
+
+#Adicionar:
+[archlinuxfr]
+SigLevel = Never
+Server = http://repo.archlinux.fr/$arch
+
+sudo pacman -Syyu yaourt ttf-liberation 
+
+yaourt -S google-chrome --noconfirm
+
+==================================================================
+
+Gerenciador de touchpad, teclado, mouse
+# pacman -S xf86-input-synaptics xf86-input-mouse xf86-input-keyboard
+
+#pacotes para internet
+pacman -S wireless_tools wpa_supplicant wpa_actiond dialog
+
+sudo pacman -S archlinux-wallpaper oxygen-cursors transmission-gtk transmission-cli thunderbird gparted gimp vlc java-runtime lib32-alsa-plugins ffmpeg steam simplescreenrecorder guvcview ttf-liberation
+tar rsync unrar zip unzip p7zip file-roller firefox-i18n-pt-br chromium
+
+##########################################################################
+
+
+
+
+
+
