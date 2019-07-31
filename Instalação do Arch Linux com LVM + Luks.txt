@@ -1,12 +1,12 @@
-#============InstalaÁ„o do Arch Linux com LVM + Luks  via SSH ==================
+#============Instala√ß√£o do Arch Linux com LVM + Luks  via SSH ==================
 
 #carregar o layout do teclado
 loadkeys br-abnt2
 
 #======================================
 
-Inicie a m·quina destino em um ambiente Arch live por meio de uma imagem CD/USB Live: isso vai autenticar o usu·rio como root.
-Em seguida, configure uma senha de root que È necess·ria para uma conex„o SSH, j· que a senha padr„o do Arch para root È vazia
+Inicie a m√°quina destino em um ambiente Arch live por meio de uma imagem CD/USB Live: isso vai autenticar o usu√°rio como root.
+Em seguida, configure uma senha de root que √© necess√°ria para uma conex√£o SSH, j√° que a senha padr√£o do Arch para root √© vazia
 
 intale o sshd e habilite em seguida
 
@@ -17,7 +17,14 @@ systemctl start sshd.service
 Agora so abrir o putty em outra maquina e seguir passos
 
 #=================================
-#PreparaÁ„o dos Discos 
+
+# verificar parti√ßoes
+fdisk ‚Äêl /dev/sda
+
+#Formatar Disco
+fdisk /dev/sda
+
+#Prepara√ß√£o dos Discos 
 #/dev/sda1 200MB       ext3       (vai ser utilizada para o boot)
 #/dev/sda2 (restante do disco)  Linux LVM  (vamos separar aqui /, /home e swap)12 luksFormat /dev/sda2 
 o = Marca o disco como DOS
@@ -29,8 +36,8 @@ p =
 t =
 8E
 #====================================================================
-#EncriptaÁ„o
-#Carregar o mÛdulo para utilizar o Luks:
+#Encripta√ß√£o
+#Carregar o m√≥dulo para utilizar o Luks:
 modprobe dm-crypt
 #-----------------------------------------
 
@@ -39,7 +46,7 @@ cryptsetup -c aes-xts-plain64 -y -s 512 luksFormat /dev/sda2
 
 #---------------------------------------------
 
-#Abrir o disco para ser utilizado e preparado com o LVM para ent„o format·-los e todo o restante.
+#Abrir o disco para ser utilizado e preparado com o LVM para ent√£o format√°-los e todo o restante.
 cryptsetup open --type luks /dev/sda2 lvm
 
 
@@ -50,37 +57,37 @@ cryptsetup open --type luks /dev/sda2 lvm
 pvcreate --dataalignment 1m /dev/mapper/lvm
 
 #-------------------------------------------------------
-#EndereÁo dito mais acima, onde o disco est· disponÌvel para uso apÛs abri-lo com Luks.
-#O VG (Volume Group) vai ser respons·vel por agrupar volumes fÌsicos, 
+#Endere√ßo dito mais acima, onde o disco est√° dispon√≠vel para uso ap√≥s abri-lo com Luks.
+#O VG (Volume Group) vai ser respons√°vel por agrupar volumes f√≠sicos, 
 
 vgcreate volgroup0 /dev/mapper/lvm
 
-#LV (Logical Volume) s„o as partiÁıes lÛgicas criadas pelo LVM. 
-#Ser· nelas que as interaÁıes do kernel v„o ocorrer e n„o mais diretamente no harware.
+#LV (Logical Volume) s√£o as parti√ß√µes l√≥gicas criadas pelo LVM. 
+#Ser√° nelas que as intera√ß√µes do kernel v√£o ocorrer e n√£o mais diretamente no harware.
 
 # / = 30GB
 # swap = 8GG
 # /home = restante
 #--------------------------------------------------------------
-#Se vai seguir a mesma configuraÁ„o, os comandos ficam assim:
+#Se vai seguir a mesma configura√ß√£o, os comandos ficam assim:
 lvcreate -L 30GB volgroup0 -n lv_root
 lvcreate -L 8GB volgroup0 -n lv_swap
 lvcreate -l 100%FREE volgroup0 -n lv_home
 
 #--------------------------------------------------------------
-#carregar o mod e verificar se foi criado as partiÁoes
+#carregar o mod e verificar se foi criado as parti√ßoes
 modprobe dm_mod
 vgscan
 vgchange -ay
 
 #===============================================================
-#FormataÁ„o
+#Formata√ß√£o
 
 mkfs.ext2 /dev/sda1
 mkfs.ext4 /dev/volgroup0/lv_root
 mkfs.ext4 /dev/volgroup0/lv_home
 
-#E a criaÁ„o da swap:
+#E a cria√ß√£o da swap:
 # mkswap /dev/volgroup0/lv_swap
 #===============================================================
 #Montagem
@@ -92,16 +99,16 @@ mkdir /mnt/home
 mount /dev/volgroup0/lv_home /mnt/home
 swapon /dev/volgroup0/lv_swap
 
-Note como est· organizado, com /, /boot e /home separados.
+Note como est√° organizado, com /, /boot e /home separados.
 #===============================================================
-#InstalaÁ„o
+#Instala√ß√£o
 pacstrap /mnt base base-devel
 #------------------------------------
 
 #O Grub, a primeira parte:
 pacstrap /mnt grub-bios
 #------------------------------------
-#E gerar o fstab para ìautomatizarî a montagem das partiÁıes:
+#E gerar o fstab para ‚Äúautomatizar‚Äù a montagem das parti√ß√µes:
 genfstab -p -U /mnt >> /mnt/etc/fstab
 
 #================================================================
@@ -116,7 +123,7 @@ pacman -S networkmanager network-manager-applet wireless_tools wpa_supplicant wp
 
 #############################################################
 #Grub - Segunda parte
-#Antes do Grub, abra o arquivo /etc/mkinitcpio.conf. Procure por ìHOOKSî e coloque antes de ìfilesystemsî a seguinte sequÍncia: ìkeymap encrypt lvm2î.
+#Antes do Grub, abra o arquivo /etc/mkinitcpio.conf. Procure por ‚ÄúHOOKS‚Äù e coloque antes de ‚Äúfilesystems‚Äù a seguinte sequ√™ncia: ‚Äúkeymap encrypt lvm2‚Äù.
 
 vim /etc/mkinitcpio.conf
 #HOOKS=(base undev autodetect modconf block keymap encrypt lvm2 filesystems keyboard fsck)
@@ -128,7 +135,7 @@ mkinitcpio -p linux-lts
 
 
 ####################################################################
-#E edita o arquivo /etc/default/grub, na opÁ„o GRUB_CMDLINE_LINUX_DEFAULT adicione"cryptdevice=/dev/sda2:volgroup0 quiet"
+#E edita o arquivo /etc/default/grub, na op√ß√£o GRUB_CMDLINE_LINUX_DEFAULT adicione"cryptdevice=/dev/sda2:volgroup0 quiet"
 
 Vim /etc/default/grub
 
@@ -149,7 +156,7 @@ cp /usr/share/locale/en\@quot/LC_MESSAGES/grub.mo /boot/grub/locale/en.mo
 grub-mkconfig -o /boot/grub/grub.cfg
 
 
-#Agora sim, Grub fazemos a instalaÁ„o da segunda parte:
+#Agora sim, Grub fazemos a instala√ß√£o da segunda parte:
 
 grub-install --target=i386-pc --recheck /dev/sda
 
@@ -177,9 +184,9 @@ passwd
 
 
 
-CONFIGURA«√O
+CONFIGURA√á√ÉO
 
-# Adicionar usu·rio  remover -s sinalizador se vocÍ n„o quiser usar o zsh
+# Adicionar usu√°rio  remover -s sinalizador se voc√™ n√£o quiser usar o zsh
 useradd -m -g users -G adm,systemd-journal,wheel,rfkill,games,power,optical,storage,scanner,lp,audio,video -s /bin/bash username
 passwd username
 
@@ -215,7 +222,7 @@ FONT_MAP=
 ##############################################################
 
 #setando fuso horario
-#ln -sf /usr/share/zoneinfo/Regi„o/Cidade /etc/localtime
+#ln -sf /usr/share/zoneinfo/Regi√£o/Cidade /etc/localtime
 ln -s /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 
 #sincronizando o relogio de hardware com o do sistema
@@ -263,7 +270,7 @@ sudo pacman -S slim slim-themes archlinux-themes-slim
 Habilitar na inicializacao
 sudo systemctl enable slim.service
 
-Trocar Tema de inicializa;·o 
+Trocar Tema de inicializa;√°o 
 sudo nano /etc/slim.conf (tema do arch archlinux-simplyblack)
 
 ===============================================================
